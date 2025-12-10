@@ -1,0 +1,13 @@
+Engine Project
+C++20
+
+C/C++
+追加のインクルードディレクトリ
+$(ProjectDir)include\
+
+プリコンパイル済みヘッダー 使用
+プリコンパイル済みヘッダーファイル　EnginePCH.h
+
+システム
+
+サブシステム Windows
