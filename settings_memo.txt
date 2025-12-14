@@ -11,3 +11,5 @@ $(ProjectDir)include\
 システム
 
 サブシステム Windows
+
+必ず使用する#using指定ファイル

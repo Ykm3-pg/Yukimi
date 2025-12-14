@@ -16,12 +16,36 @@
     <ClCompile Include="src\EnginePCH.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\IModule.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Logger.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ykmMath.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\RenderingModule.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\Window.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\EnginePCH.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\IModule.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Logger.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ykmMath.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\RenderingModule.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
