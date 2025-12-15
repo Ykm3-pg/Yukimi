@@ -4,6 +4,8 @@
 #include <dxgi1_6.h>
 #include <wrl.h>
 
+#include "d3dx12.h"
+
 #include "IModule.h"
 
 #pragma comment(lib, "d3d12.lib")
@@ -79,9 +81,8 @@ private:
 
     D3D12_RECT mScissorRect;
 
-    //mClearColor;
+    ComPtr<ID3D12DescriptorHeap> mRTVHeap;
 
-    bool mIsClear;
 
 #ifdef _DEBUG
     Microsoft::WRL::ComPtr<ID3D12Debug> mDebugger;

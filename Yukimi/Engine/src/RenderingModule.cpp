@@ -25,6 +25,11 @@ RenderingModule::~RenderingModule()
 
 void RenderingModule::Initialize()
 {
+    auto window = mWindow.lock();
+    if (!window) {
+        assert(false && "window nullptr");
+    }
+
     {
 #ifdef _DEBUG
         HR_CHECK(D3D12GetDebugInterface(IID_PPV_ARGS(&mDebugger)), "mDebugger Init Failed");
@@ -62,7 +67,7 @@ void RenderingModule::Initialize()
             {
                 break;
             }
-            else if (i == level_num)
+            else if (i == level_num - 1)
             {
                 HR_CHECK(S_FALSE, "mDevice Init Failed");
             }
@@ -76,6 +81,7 @@ void RenderingModule::Initialize()
 
         // GPUにまとめて命令を送るもの
         HR_CHECK(mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mCmdAllocator.Get(), nullptr, IID_PPV_ARGS(&mCmdList)), "mCmdList Init Failed");
+        mCmdList->Close();
 
         // コマンドリストをGPUに順に実行させていく為の仕組み
         D3D12_COMMAND_QUEUE_DESC cmdQueueDesc = {};
@@ -87,8 +93,8 @@ void RenderingModule::Initialize()
 
         //各種設定をしてスワップチェーンを生成
         DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
-        swapchainDesc.Width = static_cast<UINT>(mWindow.lock()->GetWidth());
-        swapchainDesc.Height = static_cast<UINT>(mWindow.lock()->GetHeight());
+        swapchainDesc.Width = static_cast<UINT>(window->GetWidth());
+        swapchainDesc.Height = static_cast<UINT>(window->GetHeight());
         swapchainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;          //色情報の設定
         swapchainDesc.SampleDesc.Count = 1;                         //マルチサンプルしない
         swapchainDesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;         //バックバッファ用
@@ -100,7 +106,7 @@ void RenderingModule::Initialize()
 
         HR_CHECK(mDxgiFactory->CreateSwapChainForHwnd(
             mCmdQueue.Get(),
-            mWindow.lock()->GetHandle(),
+            window->GetHandle(),
             &swapchainDesc,
             nullptr,
             nullptr,
@@ -109,56 +115,77 @@ void RenderingModule::Initialize()
 
         HR_CHECK(mDevice->CreateFence(mFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)), "mFence Init Failed");
     }
+
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc ={};
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        desc.NodeMask = 0;
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        desc.NumDescriptors = 2;
+
+        HR_CHECK(mDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&mRTVHeap)), "mRTVHeap Init Failed");
+    }
+
+    {
+        mBackBufferResources.resize(2);
+        mHandles.resize(2);
+
+        //CPUハンドル取得用の変数
+        auto start_handle = mRTVHeap->GetCPUDescriptorHandleForHeapStart();
+        auto increment_size = mDevice->GetDescriptorHandleIncrementSize(mRTVHeap->GetDesc().Type);
+
+        //バックバッファ用の
+        for (int i = 0; i < 2; i++)
+        {
+            //スワップチェーンからバッファを取得
+            mSwapchain->GetBuffer(i, IID_PPV_ARGS(&mBackBufferResources[i]));
+
+            //ディスクリプターヒープのハンドルを取得
+            mHandles[i] = CD3DX12_CPU_DESCRIPTOR_HANDLE(start_handle, i, increment_size);
+
+            //レンダーターゲットビューの生成
+            mDevice->CreateRenderTargetView(mBackBufferResources[i].Get(), nullptr, mHandles[i]);
+        }
+    }
 }
 
 void RenderingModule::Update()
 {
-    //int bbIdx = mSwapchain->GetCurrentBackBufferIndex();
-    //D3D12_CPU_DESCRIPTOR_HANDLE rtvH = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
-    //rtvH.ptr += bbIdx * mDev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    UINT index = mSwapchain->GetCurrentBackBufferIndex();
+    auto resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(mBackBufferResources[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    mCmdList->ResourceBarrier(1, &resource_barrier);
 
-    //BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    //BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    //BarrierDesc.Transition.pResource = mBackBuffers[bbIdx];
-    //BarrierDesc.Transition.Subresource = 0;
+    mCmdList->OMSetRenderTargets(1, &mHandles[index], true, nullptr);
 
-    //BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    //BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    float color[] = { 0.f, 1.f, 1.f, 1.0f };
 
-    //mCmdList->ResourceBarrier(1, &BarrierDesc);
+    mCmdList->ClearRenderTargetView(mHandles[index], color, 0, nullptr);
 
-    //mCmdList->OMSetRenderTargets(1, &rtvH, true, nullptr);
+    resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(mBackBufferResources[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    mCmdList->ResourceBarrier(1, &resource_barrier);
 
-    //float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    mCmdList->Close();
 
-    //mCmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
+    ID3D12CommandList* cmdlists[] = { mCmdList.Get() };
+    mCmdQueue->ExecuteCommandLists(1, cmdlists);
 
-    //BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    //BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-    //mCmdList->ResourceBarrier(1, &BarrierDesc);
+    mSwapchain->Present(1, 0);
 
-    //mCmdList->Close();
+    mCmdQueue->Signal(mFence.Get(), ++mFenceValue);
 
-    //ID3D12CommandList* cmdlists[] = { mCmdList };
-    //mCmdQueue->ExecuteCommandLists(1, cmdlists);
+    if (mFence->GetCompletedValue() < mFenceValue)
+    {
+        HANDLE event = CreateEvent(nullptr, false, false, nullptr);
 
-    //mCmdQueue->Signal(mFence, ++mFenceVal);
+        mFence->SetEventOnCompletion(mFenceValue, event);
 
-    //if (mFence->GetCompletedValue() != mFenceVal)
-    //{
-    //    HANDLE event = CreateEvent(nullptr, false, false, nullptr);
+        WaitForSingleObject(event, INFINITE);
 
-    //    mFence->SetEventOnCompletion(mFenceVal, event);
+        CloseHandle(event);
+    }
 
-    //    WaitForSingleObject(event, INFINITE);
-
-    //    CloseHandle(event);
-    //}
-
-    //mCmdAllocator->Reset();
-    //mCmdList->Reset(mCmdAllocator, nullptr);
-
-    //mSwapchain->Present(1, 0);
+    mCmdAllocator->Reset();
+    mCmdList->Reset(mCmdAllocator.Get(), nullptr);
 }
 
 void RenderingModule::Finalize()
